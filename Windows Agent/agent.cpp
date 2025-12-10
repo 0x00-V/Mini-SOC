@@ -5,11 +5,13 @@
 #include <cstdint>
 #include <vector>
 #include <Windows.h>
+#include <tlhelp32.h>
 
 
 static float CalculateCPULoad();
 static unsigned long long FileTimeToInt64();
 float GetCPULoad();
+std::string WCHR_UTF8(const wchar_t* wide);
 
 struct ProcessCollection{
     uint64_t timestamp;
@@ -57,10 +59,43 @@ struct ResourceUsageCollection{
 };
 
 
-/*std::vector<ProcessCollection> collectProcesses(){
+std::vector<ProcessCollection> collectProcesses(){
+    std::vector<ProcessCollection> returnVector;
+    HANDLE hProcessSnap;
+    PROCESSENTRY32W pe32;
+    hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if(hProcessSnap ==INVALID_HANDLE_VALUE)
+    {
+        std::cout << "This will eventually create an err log and exit the program\n";
+        return returnVector;
+    }
 
+    pe32.dwSize = sizeof(PROCESSENTRY32W);
+    if (!Process32FirstW(hProcessSnap, &pe32))
+    {
+        std::cout << "This will eventually create an err log and exit the program\n";
+        CloseHandle(hProcessSnap);          
+        return returnVector;
+    }
+    do
+    {
+        ProcessCollection proc{};
+        proc.timestamp = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+        proc.agent_id = "null"; // I'll add later
+        proc.source = "process";
+        proc.pid = pe32.th32ProcessID;
+        proc.parent_pid = pe32.th32ParentProcessID;
+        proc.process_name = WCHR_UTF8(pe32.szExeFile);
+        proc.full_path  = ""; // I'll add later
+        proc.cmd_line   = ""; // I'll add later
+        proc.process_usr = ""; // I'll add later
+        returnVector.push_back(proc);
+    } while (Process32NextW(hProcessSnap, &pe32));
+    CloseHandle(hProcessSnap);
+    return returnVector;
+    
 }
-
+/*
 std::vector<PortCollection> collectPorts(){
     
 }*/
@@ -82,45 +117,29 @@ ResourceUsageCollection collectResourceUsage(){
     return instance;
 }
 
-void sendCollectionInfo()
-{
+void sendCollectionInfo(){
 
 }
 
 void listener(){
-    // Will listen for connection init, query requests
 
-    // A collection event will proc one of the following (collectProcesses, collectPorts, collectResourceUsage)
-    // Will spawn a new thread for each collection type. We'll then use sendCollectionInfo to send in a serialised JSON format
 }
 
 
 
 
-int main(){
-    //std::thread eventListner(listener);
+int main() {
 
-
-    // Testing resCol
-    ResourceUsageCollection test = collectResourceUsage();
-
-    std::cout << "===== RESOURCE USAGE TEST =====\n";
-    std::cout << "Agent ID: " << test.agent_id << "\n";
-    std::cout << "Source: " << test.source << "\n";
-    std::cout << "Timestamp: " << test.timestamp << "\n";
-    std::cout << "CPU Usage (%): " << test.cpu_usage_p << "/100\n";
-    std::cout << "Total Memory (MB): " << test.total_memory_mb << "\n";
-    std::cout << "Used Memory (MB): " << test.used_memory_mb << "\n";
-    std::cout << "Free Memory (MB): " << test.free_memory_mb << "\n";
-    std::cout << "Memory Usage (%): " << test.memory_usage_p << "\n";
-    std::cout << "Uptime (s): " << test.uptime_s << "\n";
-    std::cout << "================================\n";
-    return 0;
 }
 
 
 
-
+std::string WCHR_UTF8(const wchar_t* wide) {
+    int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, wide, -1, nullptr, 0, nullptr, nullptr);
+    std::string str(sizeNeeded - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wide, -1, &str[0], sizeNeeded, nullptr, nullptr);
+    return str;
+}
 
 static float CalculateCPULoad(unsigned long long idleTicks, unsigned long long totalTicks)
 {
